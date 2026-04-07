@@ -1,6 +1,5 @@
 """通用大模型视频总结模块 - 支持多厂商"""
 
-import json
 import os
 import re
 import tempfile
@@ -8,9 +7,8 @@ from typing import Optional
 
 import httpx
 import yt_dlp
-from openai import OpenAI
 
-from llm_client import LLMClient, LLMConfig, LLM_PROVIDERS
+from llm_client import LLMClient, load_config, LLM_PROVIDERS
 
 
 def _is_bilibili_url(url: str) -> bool:
@@ -169,7 +167,7 @@ class VideoSummarizer:
             self.provider = provider
             self.model = model
         else:
-            config = LLMConfig.get()
+            config = load_config()
             self.provider = config.get("provider", "deepseek")
             self.model = config.get("model", "deepseek-chat")
             api_key = config.get("api_key", "")

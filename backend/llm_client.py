@@ -1,10 +1,11 @@
 """通用大模型客户端 - 支持多厂商API"""
 
-from typing import Optional
-
+import os
+import json
 from openai import OpenAI
 import httpx
 
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "llm_config.json")
 
 LLM_PROVIDERS = {
     "deepseek": {
@@ -46,26 +47,35 @@ LLM_PROVIDERS = {
 }
 
 
-class LLMConfig:
-    """全局 LLM 配置"""
+def load_config():
+    """从文件加载配置"""
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"provider": "deepseek", "api_key": "", "model": "deepseek-chat"}
 
-    _config = {
-        "provider": "deepseek",
-        "api_key": "",
-        "model": "deepseek-chat",
-    }
 
-    @classmethod
-    def get(cls) -> dict:
-        return cls._config.copy()
+def save_config(config):
+    """保存配置到文件"""
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
 
-    @classmethod
-    def set(cls, provider: str, api_key: str, model: str):
-        cls._config = {"provider": provider, "api_key": api_key, "model": model}
 
-    @classmethod
-    def is_configured(cls) -> bool:
-        return bool(cls._config.get("api_key"))
+def get_llm_config():
+    return load_config()
+
+
+def set_llm_config(provider: str, api_key: str, model: str):
+    config = {"provider": provider, "api_key": api_key, "model": model}
+    save_config(config)
+
+
+def is_configured():
+    config = load_config()
+    return bool(config.get("api_key"))
 
 
 class LLMClient:

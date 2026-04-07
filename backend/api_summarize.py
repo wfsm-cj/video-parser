@@ -44,13 +44,25 @@ def _check_summary_permission(user: dict | None):
 
 
 def _get_summarizer():
-    """延迟初始化 VideoSummarizer（仅在首次调用时创建）"""
-    from summarizer import VideoSummarizer
+    """延迟初始化 VideoSummarizer（使用用户配置的 LLM）"""
+    from summarizer import VideoSummarizer, LLMConfig
+
     if not hasattr(_get_summarizer, "_instance"):
         try:
-            _get_summarizer._instance = VideoSummarizer()
+            config = LLMConfig.get()
+            api_key = config.get("api_key", "")
+
+            if not api_key:
+                raise ValueError("请先在设置中配置大模型 API Key")
+
+            _get_summarizer._instance = VideoSummarizer(
+                provider=config.get("provider", "deepseek"),
+                api_key=api_key,
+                model=config.get("model", "deepseek-chat"),
+            )
         except ValueError as e:
             raise HTTPException(status_code=500, detail=str(e))
+
     return _get_summarizer._instance
 
 

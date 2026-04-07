@@ -6,6 +6,7 @@
       @register="showAuthModal('register')"
       @logout="handleLogout"
       @open-vip="handleOpenVip"
+      @open-settings="showLLMConfigModal"
     />
     <main class="flex-1">
       <HeroSection
@@ -77,6 +78,12 @@
       @close="authModalVisible = false"
       @success="handleAuthSuccess"
     />
+
+    <LLMConfigModal
+      :visible="llmConfigVisible"
+      @close="llmConfigVisible = false"
+      @save="handleLLMConfigSave"
+    />
   </div>
 </template>
 
@@ -93,6 +100,7 @@ import PricingSection from './components/PricingSection.vue'
 import PlatformSection from './components/PlatformSection.vue'
 import AppFooter from './components/AppFooter.vue'
 import AuthModal from './components/AuthModal.vue'
+import LLMConfigModal from './components/LLMConfigModal.vue'
 import { parseVideo, downloadViaServer } from './api/video.js'
 import { getSavedUser, fetchMe, logout as logoutApi, isLoggedIn } from './api/auth.js'
 import { createCheckoutSession } from './api/payment.js'
@@ -125,10 +133,19 @@ onBeforeUnmount(() => { document.removeEventListener('keydown', onKeyDown) })
 const currentUser = ref(null)
 const authModalVisible = ref(false)
 const authModalMode = ref('login')
+const llmConfigVisible = ref(false)
 
 function showAuthModal(mode = 'login') {
   authModalMode.value = mode
   authModalVisible.value = true
+}
+
+function showLLMConfigModal() {
+  llmConfigVisible.value = true
+}
+
+function handleLLMConfigSave(config) {
+  console.log('LLM 配置已更新:', config)
 }
 
 function handleAuthSuccess(user) {

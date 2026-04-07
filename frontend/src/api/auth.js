@@ -61,6 +61,14 @@ export function logout() {
   removeToken()
 }
 
+export async function resetPassword(oldPassword, newPassword) {
+  const res = await axios.post('/api/auth/reset-password', 
+    { old_password: oldPassword, new_password: newPassword },
+    { headers: authHeaders() }
+  )
+  return res.data
+}
+
 export function isLoggedIn() {
   return !!getToken()
 }

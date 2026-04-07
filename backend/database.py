@@ -90,6 +90,15 @@ def create_user(email: str, password_hash: str) -> dict:
         return {"id": cursor.lastrowid, "email": email}
 
 
+def update_password(user_id: int, password_hash: str):
+    """更新用户密码"""
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?",
+            (password_hash, user_id),
+        )
+
+
 def check_and_increment_summary(user_id: int) -> tuple[bool, int]:
     """
     检查用户是否可以使用 AI 总结，并自增计数。

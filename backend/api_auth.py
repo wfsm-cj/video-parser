@@ -11,7 +11,7 @@ from auth import (
     validate_password,
     verify_password,
 )
-from database import create_user, get_user_by_email
+from database import create_user, get_user_by_email, update_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -24,6 +24,11 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class ResetPasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
 
 def _build_user_response(user: dict) -> dict:
@@ -95,3 +100,19 @@ async def get_me(user: dict = Depends(get_current_user)):
         "success": True,
         "data": _build_user_response(user),
     }
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest, user: dict = Depends(get_current_user)):
+    """已登录用户重置密码"""
+    if not verify_password(req.old_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="原密码错误")
+
+    err = validate_password(req.new_password)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    hashed = hash_password(req.new_password)
+    update_password(user["id"], hashed)
+
+    return {"success": True, "message": "密码修改成功"}

@@ -14,10 +14,31 @@ def _is_bilibili_url(url: str) -> bool:
     return "bilibili.com" in url or "b23.tv" in url
 
 
+def _extract_bvid_and_p(url: str) -> tuple[Optional[str], int]:
+    """从 URL 提取 BVID 和分P索引"""
+    bvid = None
+    patterns = [
+        r"bilibili\.com/video/(BV[\w]+)",
+        r"b23\.tv/(\w+)",
+        r"(BV[\w]{10})",
+    ]
+    for p in patterns:
+        m = re.search(p, url)
+        if m:
+            bvid = m.group(1)
+            break
+    
+    if not bvid:
+        return None, 1
+    
+    p_match = re.search(r"[?&]p=(\d+)", url)
+    p = int(p_match.group(1)) if p_match else 1
+    
+    return bvid, p
+
+
 class SubtitleExtractor:
     """从视频 URL 提取平台字幕"""
-
-    PREFERRED_LANGS = ["zh-Hans", "zh", "zh-CN", "en", "ja", "ko"]
 
     def extract(self, url: str) -> dict:
         if _is_bilibili_url(url):
@@ -30,18 +51,29 @@ class SubtitleExtractor:
     def _extract_bilibili(self, url: str) -> dict:
         empty = {"has_subtitle": False, "language": "", "subtitle_type": "none", "segments": [], "full_text": ""}
         try:
-            bvid = self._parse_bvid(url)
+            bvid, p = _extract_bvid_and_p(url)
             if not bvid:
                 return empty
 
             headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.bilibili.com"}
 
+            # 获取视频信息（包含分P列表）
             view_resp = httpx.get(f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}", headers=headers, timeout=15)
             view_data = view_resp.json().get("data", {})
-            cid, aid = view_data.get("cid"), view_data.get("aid")
+            
+            pages = view_data.get("pages", [])
+            if p > 1 and len(pages) >= p:
+                # 获取分P的 cid
+                page_info = pages[p - 1]
+                cid = page_info.get("cid")
+            else:
+                cid = view_data.get("cid")
+            
+            aid = view_data.get("aid")
             if not cid or not aid:
                 return empty
 
+            # 获取字幕列表
             dm_resp = httpx.get(f"https://api.bilibili.com/x/v2/dm/view?aid={aid}&oid={cid}&type=1", headers=headers, timeout=15)
             dm_data = dm_resp.json().get("data", {})
             subtitle_list = dm_data.get("subtitle", {}).get("subtitles", [])
@@ -72,11 +104,6 @@ class SubtitleExtractor:
         except Exception as e:
             print(f"B站字幕提取失败: {e}")
             return empty
-
-    @staticmethod
-    def _parse_bvid(url: str) -> Optional[str]:
-        m = re.search(r"(BV[a-zA-Z0-9]+)", url)
-        return m.group(1) if m else None
 
 
 class VideoSummarizer:

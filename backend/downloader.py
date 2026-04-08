@@ -19,14 +19,14 @@ def _find_ffmpeg_path() -> Optional[str]:
 
 def _try_bilibili_api(url: str) -> Optional[dict]:
     """尝试使用 B站 API 解析"""
-    from bili_api import extract_bvid, parse_bilibili_bvid, is_bilibili_url
+    from bili_api import extract_bvid_and_p, parse_bilibili_bvid, is_bilibili_url
     if not is_bilibili_url(url):
         return None
-    bvid = extract_bvid(url)
+    bvid, p = extract_bvid_and_p(url)
     if not bvid:
         return None
     try:
-        return parse_bilibili_bvid(bvid)
+        return parse_bilibili_bvid(bvid, p)
     except Exception:
         return None
 

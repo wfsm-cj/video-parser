@@ -25,10 +25,6 @@ class ChatRequest(BaseModel):
 
 
 def _check_vip_permission(user: dict | None):
-    """
-    检查 VIP 权限。只有 VIP 用户才能使用 AI 总结功能。
-    返回 (allowed, message)
-    """
     if not user:
         return False, "请先登录"
 
@@ -39,27 +35,21 @@ def _check_vip_permission(user: dict | None):
 
 
 def _get_summarizer():
-    """延迟初始化 VideoSummarizer（使用文件中的 LLM 配置）"""
+    """每次都重新创建 VideoSummarizer，确保读取最新配置"""
     from summarizer import VideoSummarizer
     from llm_client import load_config
 
-    if not hasattr(_get_summarizer, "_instance"):
-        try:
-            config = load_config()
-            api_key = config.get("api_key", "")
+    config = load_config()
+    api_key = config.get("api_key", "")
 
-            if not api_key:
-                raise ValueError("请先在设置中配置大模型 API Key")
+    if not api_key:
+        raise ValueError("请先在设置中配置大模型 API Key")
 
-            _get_summarizer._instance = VideoSummarizer(
-                provider=config.get("provider", "deepseek"),
-                api_key=api_key,
-                model=config.get("model", "deepseek-chat"),
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    return _get_summarizer._instance
+    return VideoSummarizer(
+        provider=config.get("provider", "deepseek"),
+        api_key=api_key,
+        model=config.get("model", "deepseek-chat"),
+    )
 
 
 def _get_extractor():
@@ -72,11 +62,6 @@ def _get_extractor():
 
 @router.post("/summarize", response_class=EventSourceResponse)
 async def summarize_video(req: SummarizeRequest, user: dict | None = Depends(get_optional_user)) -> AsyncIterable[ServerSentEvent]:
-    """
-    AI 视频总结（SSE 流式）
-    事件类型: subtitle / summary / mindmap / done / error
-    只有 VIP 用户可用
-    """
     allowed, message = _check_vip_permission(user)
     if not allowed:
         yield ServerSentEvent(
@@ -106,10 +91,8 @@ async def summarize_video(req: SummarizeRequest, user: dict | None = Depends(get
 
         full_text = subtitle_data["full_text"]
         
-        # 获取 summarizer
         summarizer = _get_summarizer()
         
-        # 流式输出总结
         try:
             for token in summarizer.summarize_stream(full_text, req.language):
                 yield ServerSentEvent(raw_data=json.dumps(token, ensure_ascii=False), event="summary")
@@ -120,7 +103,6 @@ async def summarize_video(req: SummarizeRequest, user: dict | None = Depends(get
             )
             return
 
-        # 生成思维导图
         try:
             mindmap_md = await loop.run_in_executor(
                 None, summarizer.generate_mindmap, full_text, req.language
@@ -146,7 +128,6 @@ async def summarize_video(req: SummarizeRequest, user: dict | None = Depends(get
 
 @router.post("/chat", response_class=EventSourceResponse)
 async def chat_with_video(req: ChatRequest, user: dict | None = Depends(get_optional_user)) -> AsyncIterable[ServerSentEvent]:
-    """AI 视频问答（SSE 流式）- 只有 VIP 可用"""
     allowed, message = _check_vip_permission(user)
     if not allowed:
         yield ServerSentEvent(

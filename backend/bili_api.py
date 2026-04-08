@@ -5,8 +5,13 @@ import re
 from typing import Optional
 
 
-def parse_bilibili_bvid(bvid: str) -> dict:
-    """通过 B站官方 API 获取视频信息"""
+def parse_bilibili_bvid(bvid: str, p: int = 1) -> dict:
+    """通过 B站官方 API 获取视频信息
+    
+    Args:
+        bvid: B站视频 BV 号
+        p: 分P索引，从1开始
+    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": "https://www.bilibili.com",
@@ -20,8 +25,17 @@ def parse_bilibili_bvid(bvid: str) -> dict:
         raise ValueError(f"B站 API 错误: {data.get('message')}")
     
     info = data.get("data", {})
-    aid = info.get("aid")
-    cid = info.get("cid")
+    
+    # 处理分P视频
+    pages = info.get("pages", [])
+    if p > 1 and len(pages) >= p:
+        # 如果请求的是第2个及以后的视频，需要用分P的 cid
+        page_info = pages[p - 1]
+        cid = page_info.get("cid")
+        aid = info.get("aid")
+    else:
+        cid = info.get("cid")
+        aid = info.get("aid")
     
     # 获取视频播放地址 (DASH 格式)
     play_url = f"https://api.bilibili.com/x/player/playurl?avid={aid}&cid={cid}&qn=80&fnval=4048"
@@ -74,9 +88,16 @@ def parse_bilibili_bvid(bvid: str) -> dict:
                 "dash": True,
             })
     
+    # 获取正确的标题（分P视频标题）
+    title = info.get("title", "未知标题")
+    if p > 1 and len(pages) >= p:
+        page_title = pages[p - 1].get("part", "")
+        if page_title and page_title != title:
+            title = f"{title} - {page_title}"
+    
     return {
         "id": bvid,
-        "title": info.get("title", "未知标题"),
+        "title": title,
         "thumbnail": info.get("pic", "").replace("http://", "https://"),
         "duration": info.get("duration", 0),
         "duration_string": format_duration(info.get("duration", 0)),
@@ -114,8 +135,14 @@ def format_date(timestamp: int) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(timestamp))
 
 
-def extract_bvid(url: str) -> Optional[str]:
-    """从 URL 提取 BVID"""
+def extract_bvid_and_p(url: str) -> tuple[Optional[str], int]:
+    """从 URL 提取 BVID 和分P索引
+    
+    Returns:
+        (bvid, p): B站视频 BV 号和分P索引（从1开始）
+    """
+    # 提取 bvid
+    bvid = None
     patterns = [
         r"bilibili\.com/video/(BV[\w]+)",
         r"b23\.tv/(\w+)",
@@ -124,8 +151,17 @@ def extract_bvid(url: str) -> Optional[str]:
     for p in patterns:
         m = re.search(p, url)
         if m:
-            return m.group(1)
-    return None
+            bvid = m.group(1)
+            break
+    
+    if not bvid:
+        return None, 1
+    
+    # 提取 p 参数
+    p_match = re.search(r"[?&]p=(\d+)", url)
+    p = int(p_match.group(1)) if p_match else 1
+    
+    return bvid, p
 
 
 def is_bilibili_url(url: str) -> bool:

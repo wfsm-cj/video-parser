@@ -1,0 +1,5 @@
+{
+  "provider": "dashscope",
+  "api_key": "你的秘钥",
+  "model": "qwen-plus"
+}

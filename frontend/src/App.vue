@@ -8,6 +8,7 @@
       @open-vip="handleOpenVip"
       @open-settings="showLLMConfigModal"
       @open-reset-password="resetPasswordVisible = true"
+      @open-bili-cookie="biliCookieVisible = true"
     />
     <main class="flex-1">
       <HeroSection
@@ -90,6 +91,11 @@
       :visible="resetPasswordVisible"
       @close="resetPasswordVisible = false"
     />
+
+    <BiliCookieModal
+      :visible="biliCookieVisible"
+      @close="biliCookieVisible = false"
+    />
   </div>
 </template>
 
@@ -108,6 +114,7 @@ import AppFooter from './components/AppFooter.vue'
 import AuthModal from './components/AuthModal.vue'
 import LLMConfigModal from './components/LLMConfigModal.vue'
 import ResetPasswordModal from './components/ResetPasswordModal.vue'
+import BiliCookieModal from './components/BiliCookieModal.vue'
 import { parseVideo, downloadViaServer } from './api/video.js'
 import { getSavedUser, fetchMe, logout as logoutApi, isLoggedIn } from './api/auth.js'
 import { createCheckoutSession } from './api/payment.js'
@@ -142,6 +149,7 @@ const authModalVisible = ref(false)
 const authModalMode = ref('login')
 const llmConfigVisible = ref(false)
 const resetPasswordVisible = ref(false)
+const biliCookieVisible = ref(false)
 
 function showAuthModal(mode = 'login') {
   authModalMode.value = mode

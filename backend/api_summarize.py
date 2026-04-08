@@ -105,18 +105,35 @@ async def summarize_video(req: SummarizeRequest, user: dict | None = Depends(get
             return
 
         full_text = subtitle_data["full_text"]
+        
+        # 获取 summarizer
         summarizer = _get_summarizer()
+        
+        # 流式输出总结
+        try:
+            for token in summarizer.summarize_stream(full_text, req.language):
+                yield ServerSentEvent(raw_data=json.dumps(token, ensure_ascii=False), event="summary")
+        except Exception as e:
+            yield ServerSentEvent(
+                raw_data=json.dumps({"message": f"生成总结失败: {str(e)}"}, ensure_ascii=False),
+                event="error",
+            )
+            return
 
-        for token in summarizer.summarize_stream(full_text, req.language):
-            yield ServerSentEvent(raw_data=json.dumps(token, ensure_ascii=False), event="summary")
-
-        mindmap_md = await loop.run_in_executor(
-            None, summarizer.generate_mindmap, full_text, req.language
-        )
-        yield ServerSentEvent(
-            raw_data=json.dumps({"markdown": mindmap_md}, ensure_ascii=False),
-            event="mindmap",
-        )
+        # 生成思维导图
+        try:
+            mindmap_md = await loop.run_in_executor(
+                None, summarizer.generate_mindmap, full_text, req.language
+            )
+            yield ServerSentEvent(
+                raw_data=json.dumps({"markdown": mindmap_md}, ensure_ascii=False),
+                event="mindmap",
+            )
+        except Exception as e:
+            yield ServerSentEvent(
+                raw_data=json.dumps({"message": f"生成思维导图失败: {str(e)}"}, ensure_ascii=False),
+                event="error",
+            )
 
         yield ServerSentEvent(raw_data="[DONE]", event="done")
 

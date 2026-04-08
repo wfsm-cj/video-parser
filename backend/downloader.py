@@ -17,6 +17,20 @@ def _find_ffmpeg_path() -> Optional[str]:
         return None
 
 
+def _try_bilibili_api(url: str) -> Optional[dict]:
+    """尝试使用 B站 API 解析"""
+    from bili_api import extract_bvid, parse_bilibili_bvid, is_bilibili_url
+    if not is_bilibili_url(url):
+        return None
+    bvid = extract_bvid(url)
+    if not bvid:
+        return None
+    try:
+        return parse_bilibili_bvid(bvid)
+    except Exception:
+        return None
+
+
 class VideoDownloader:
     """yt-dlp 封装层，提供视频解析、下载、直链获取能力"""
 
@@ -53,6 +67,13 @@ class VideoDownloader:
 
     def parse_video(self, url: str) -> dict:
         """解析视频信息，不下载文件"""
+        
+        # 优先尝试 B站 API
+        bili_result = _try_bilibili_api(url)
+        if bili_result:
+            return bili_result
+        
+        # 回退到 yt-dlp
         ydl_opts = {
             "quiet": True,
             "no_warnings": True,
@@ -78,73 +99,59 @@ class VideoDownloader:
             "platform": platform,
             "view_count": info.get("view_count"),
             "upload_date": info.get("upload_date", ""),
-            "description": (info.get("description") or "")[:200],
+            "description": info.get("description", ""),
             "formats": formats,
-            "subtitles": list(info.get("subtitles", {}).keys()),
-            "automatic_captions": list(info.get("automatic_captions", {}).keys())[:5],
         }
 
     def _extract_formats(self, info: dict) -> list:
-        """从 yt-dlp info 中提取并整理可用格式"""
-        raw_formats = info.get("formats", [])
-        if not raw_formats:
+        formats = info.get("formats", []) or []
+        if not formats and info.get("url"):
             return []
 
-        seen = set()
         results = []
+        seen = set()
 
-        for f in raw_formats:
-            vcodec = f.get("vcodec", "none")
-            acodec = f.get("acodec", "none")
-            height = f.get("height")
-            ext = f.get("ext", "mp4")
-
-            has_video = vcodec and vcodec != "none"
-            has_audio = acodec and acodec != "none"
-
-            if not has_video:
+        for fmt in formats:
+            format_id = fmt.get("format_id", "")
+            ext = fmt.get("ext", "")
+            url = fmt.get("url", "")
+            if not url or format_id in seen:
+                continue
+            if fmt.get("vcodec", "none") == "none" and fmt.get("acodec", "none") == "none":
                 continue
 
-            resolution = f"{f.get('width', '?')}x{height}" if height else "未知"
-            filesize = f.get("filesize") or f.get("filesize_approx")
-            size_label = self._format_filesize(filesize)
+            resolution = fmt.get("resolution", "")
+            if not resolution and fmt.get("width"):
+                height = fmt.get("height", 0)
+                resolution = f"{fmt.get('width', 0)}x{height}" if height else "unknown"
 
-            if has_audio:
-                label = f"{height}p {ext.upper()} ({size_label})"
-                key = (height, ext, "av")
-            else:
-                label = f"{height}p {ext.upper()} (仅视频, {size_label})"
-                key = (height, ext, "v")
-
-            if key in seen:
-                continue
-            seen.add(key)
-
+            filesize = fmt.get("filesize") or fmt.get("filesize_approx", 0)
             results.append({
-                "format_id": f.get("format_id", ""),
+                "format_id": format_id,
                 "ext": ext,
                 "resolution": resolution,
-                "height": height or 0,
                 "filesize": filesize,
-                "filesize_approx": filesize,
-                "vcodec": vcodec,
-                "acodec": acodec if has_audio else None,
-                "has_audio": has_audio,
-                "label": label,
+                "filesize_string": self._format_filesize(filesize),
+                "url": url,
+                "codec": f"{fmt.get('vcodec', 'unknown')}/{fmt.get('acodec', 'unknown')}",
             })
+            seen.add(format_id)
 
-        results.sort(key=lambda x: x["height"], reverse=True)
-
-        if not any(r["has_audio"] for r in results) and results:
-            best_video = results[0]
-            merged = {
-                **best_video,
-                "format_id": f"bestvideo+bestaudio/best",
-                "label": f"{best_video['height']}p 最佳 (视频+音频合并)",
-                "has_audio": True,
-                "acodec": "merged",
-            }
-            results.insert(0, merged)
+        for fmt in formats:
+            if fmt.get("url") and "+" in fmt.get("format_id", ""):
+                format_id = fmt.get("format_id", "")
+                if format_id not in seen:
+                    results.insert(0, {
+                        "format_id": format_id,
+                        "ext": "mp4",
+                        "resolution": "最高画质",
+                        "filesize": 0,
+                        "filesize_string": "未知",
+                        "url": fmt.get("url", ""),
+                        "codec": f"{fmt.get('vcodec', '')} + {fmt.get('acodec', '')}",
+                        "acodec": "merged",
+                    })
+                    seen.add(format_id)
 
         return results[:15]
 
@@ -202,26 +209,39 @@ class VideoDownloader:
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "skip_download": True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         if not info:
-            raise ValueError("无法获取直链")
+            raise ValueError("无法获取视频信息")
 
-        direct_url = info.get("url")
-        if not direct_url:
-            requested = info.get("requested_formats")
-            if requested and len(requested) > 0:
-                direct_url = requested[0].get("url")
+        formats = info.get("formats", []) or []
+        target = None
 
-        if not direct_url:
-            raise ValueError("该视频不支持直链下载，请使用服务端下载模式")
+        for fmt in formats:
+            if fmt.get("format_id") == format_id and fmt.get("url"):
+                target = fmt
+                break
+
+        if not target:
+            for fmt in formats:
+                if fmt.get("url") and fmt.get("format_id"):
+                    target = fmt
+                    break
+
+        if not target:
+            raise ValueError("未找到可用格式")
 
         return {
-            "direct_url": direct_url,
-            "ext": info.get("ext", "mp4"),
-            "filesize": info.get("filesize") or info.get("filesize_approx"),
-            "title": info.get("title", "video"),
+            "url": target.get("url", ""),
+            "format_id": target.get("format_id", ""),
+            "ext": target.get("ext", "mp4"),
         }
+
+    def get_available_formats(self, url: str) -> list:
+        """获取视频可用格式列表"""
+        info = self.parse_video(url)
+        return info.get("formats", [])

@@ -31,6 +31,16 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
+        <!-- B站 Cookie 设置按钮 -->
+        <button
+          @click="$emit('open-bili-cookie')"
+          class="p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          title="B站 Cookie 配置"
+        >
+          <svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </button>
         <!-- 未登录 -->
         <template v-if="!user">
           <button @click="$emit('login')" class="hidden sm:inline-flex items-center px-4 py-2 rounded-full text-sm font-medium text-text-secondary hover:text-primary hover:bg-gray-50 transition-colors cursor-pointer">
@@ -108,7 +118,7 @@ defineProps({
   user: { type: Object, default: null },
 })
 
-defineEmits(['login', 'register', 'logout', 'open-vip', 'open-settings', 'open-reset-password'])
+defineEmits(['login', 'register', 'logout', 'open-vip', 'open-settings', 'open-reset-password', 'open-bili-cookie'])
 
 const menuOpen = ref(false)
 const menuRef = ref(null)
